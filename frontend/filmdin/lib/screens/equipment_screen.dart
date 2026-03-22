@@ -7,6 +7,15 @@ import '../services/api_service.dart';
 import 'add_equipment_screen.dart';
 import 'equipment_detail_screen.dart';
 
+bool isOwner(dynamic ownerId, String? currentUserId) {
+  if (currentUserId == null) return false;
+  if (ownerId == null) return false;
+  if (ownerId is Map) {
+    return (ownerId['_id'] ?? ownerId['id'])?.toString() == currentUserId;
+  }
+  return ownerId.toString() == currentUserId;
+}
+
 class EquipmentScreen extends StatefulWidget {
   const EquipmentScreen({super.key});
 
@@ -172,11 +181,10 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                         final ownerName = owner['name'] ?? 'Unknown';
                         final price = (item['pricePerDay'] as num?)?.toDouble() ?? 0;
                         final category = item['category'] ?? 'Other';
-                        final currentUserId =
-                          (authProvider.user?['_id'] ?? authProvider.user?['id'] ?? '')
-                            .toString();
-                        final ownerId = (owner['_id'] ?? owner['id'] ?? '').toString();
-                        final isOwner = currentUserId.isNotEmpty && currentUserId == ownerId;
+                        final isOwnerEquipment = isOwner(
+                          item['owner'],
+                          authProvider.user?['id']?.toString(),
+                        );
 
                         return GestureDetector(
                           onTap: () {
@@ -249,7 +257,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                     ],
                                   ),
                                 ),
-                                if (isOwner)
+                                if (isOwnerEquipment)
                                   PopupMenuButton<String>(
                                     icon: const Icon(
                                       Icons.more_vert,

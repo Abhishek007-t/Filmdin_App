@@ -11,6 +11,15 @@ import 'equipment_screen.dart';
 import 'jobs_screen.dart';
 import 'edit_profile_screen.dart';
 
+bool isOwner(dynamic ownerId, String? currentUserId) {
+  if (currentUserId == null) return false;
+  if (ownerId == null) return false;
+  if (ownerId is Map) {
+    return (ownerId['_id'] ?? ownerId['id'])?.toString() == currentUserId;
+  }
+  return ownerId.toString() == currentUserId;
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -244,13 +253,10 @@ class _FeedTabState extends State<FeedTab> {
                           itemCount: postProvider.posts.length,
                           itemBuilder: (context, index) {
                             final post = postProvider.posts[index];
-                            final currentUserId =
-                                (authProvider.user?['_id'] ?? authProvider.user?['id'] ?? '')
-                                    .toString();
-                            final postUser = post['user'] as Map<String, dynamic>? ?? {};
-                            final postUserId = (postUser['_id'] ?? postUser['id'] ?? '').toString();
-                            final canDelete =
-                                currentUserId.isNotEmpty && postUserId == currentUserId;
+                            final canDelete = isOwner(
+                              post['user'],
+                              authProvider.user?['id']?.toString(),
+                            );
 
                             return _RealPostCard(
                               post: post,
@@ -1179,6 +1185,10 @@ class _ProfileTabState extends State<ProfileTab> {
                         itemCount: credits.length,
                         itemBuilder: (context, index) {
                           final credit = credits[index];
+                          final canDeleteCredit = isOwner(
+                            credit['user'],
+                            authProvider.user?['id']?.toString(),
+                          );
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),
                             padding: const EdgeInsets.all(16),
@@ -1231,7 +1241,8 @@ class _ProfileTabState extends State<ProfileTab> {
                                     ],
                                   ),
                                 ),
-                                        IconButton(
+                                        if (canDeleteCredit)
+                                          IconButton(
                                           onPressed: () async {
                                             final shouldDelete = await showDialog<bool>(
                                               context: context,

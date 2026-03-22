@@ -7,6 +7,15 @@ import '../theme/app_theme.dart';
 import 'add_job_screen.dart';
 import 'job_detail_screen.dart';
 
+bool isOwner(dynamic ownerId, String? currentUserId) {
+  if (currentUserId == null) return false;
+  if (ownerId == null) return false;
+  if (ownerId is Map) {
+    return (ownerId['_id'] ?? ownerId['id'])?.toString() == currentUserId;
+  }
+  return ownerId.toString() == currentUserId;
+}
+
 class JobsScreen extends StatefulWidget {
   const JobsScreen({super.key});
 
@@ -205,15 +214,10 @@ class _JobsScreenState extends State<JobsScreen> {
                               final compensation =
                                   (job?['compensation'] ?? 'Negotiable')
                                       .toString();
-                                final postedBy =
-                                  job?['postedBy'] as Map<String, dynamic>? ?? {};
-                                final ownerId =
-                                  (postedBy['_id'] ?? postedBy['id'] ?? '').toString();
-                                final currentUserId =
-                                  (authProvider.user?['_id'] ?? authProvider.user?['id'] ?? '')
-                                    .toString();
-                                final isOwner =
-                                  ownerId.isNotEmpty && currentUserId == ownerId;
+                              final isOwnerJob = isOwner(
+                                job?['postedBy'],
+                                authProvider.user?['id']?.toString(),
+                              );
 
                               return GestureDetector(
                                 onTap: () {
@@ -328,7 +332,7 @@ class _JobsScreenState extends State<JobsScreen> {
                                             ),
                                           ),
                                           const SizedBox(width: 8),
-                                          if (isOwner)
+                                          if (isOwnerJob)
                                             PopupMenuButton<String>(
                                               icon: const Icon(
                                                 Icons.more_vert,
