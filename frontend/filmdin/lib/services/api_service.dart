@@ -219,6 +219,22 @@ static const String baseUrl = 'https://balanced-determination-production.up.rail
     }
   }
 
+  // Delete Post
+  static Future<Map<String, dynamic>> deletePost({
+    required String token,
+    required String postId,
+  }) async {
+    try {
+      final response = await _dio.delete(
+        '/posts/$postId',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      return {'success': true, 'data': response.data};
+    } on DioException catch (e) {
+      return _handleDioError(e);
+    }
+  }
+
   // ─── EQUIPMENT ───────────────────────────────────────
 
   // List Equipment
@@ -528,8 +544,24 @@ static const String baseUrl = 'https://balanced-determination-production.up.rail
     } on DioException catch (e) {
       return _handleDioError(e);
     }
-    
   }
+
+  // Close Job
+  static Future<Map<String, dynamic>> closeJob({
+    required String token,
+    required String jobId,
+  }) async {
+    try {
+      final response = await _dio.put(
+        '/jobs/$jobId/close',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      return {'success': true, 'data': response.data};
+    } on DioException catch (e) {
+      return _handleDioError(e);
+    }
+  }
+
   // Get My Stats
 static Future<Map<String, dynamic>> getMyStats({
   required String token,

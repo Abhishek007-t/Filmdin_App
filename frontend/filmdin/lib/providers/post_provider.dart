@@ -60,4 +60,10 @@ class PostProvider extends ChangeNotifier {
       }
     }
   }
+
+  // Remove Post
+  void removePost(String postId) {
+    _posts.removeWhere((post) => post['_id'] == postId);
+    notifyListeners();
+  }
 }

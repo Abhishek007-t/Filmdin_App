@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/job_provider.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import 'add_job_screen.dart';
 import 'job_detail_screen.dart';
@@ -87,6 +88,7 @@ class _JobsScreenState extends State<JobsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
     final jobProvider = Provider.of<JobProvider>(context);
     final jobs = jobProvider.jobs;
 
@@ -203,6 +205,15 @@ class _JobsScreenState extends State<JobsScreen> {
                               final compensation =
                                   (job?['compensation'] ?? 'Negotiable')
                                       .toString();
+                                final postedBy =
+                                  job?['postedBy'] as Map<String, dynamic>? ?? {};
+                                final ownerId =
+                                  (postedBy['_id'] ?? postedBy['id'] ?? '').toString();
+                                final currentUserId =
+                                  (authProvider.user?['_id'] ?? authProvider.user?['id'] ?? '')
+                                    .toString();
+                                final isOwner =
+                                  ownerId.isNotEmpty && currentUserId == ownerId;
 
                               return GestureDetector(
                                 onTap: () {
@@ -317,6 +328,167 @@ class _JobsScreenState extends State<JobsScreen> {
                                             ),
                                           ),
                                           const SizedBox(width: 8),
+                                          if (isOwner)
+                                            PopupMenuButton<String>(
+                                              icon: const Icon(
+                                                Icons.more_vert,
+                                                color: AppTheme.grey,
+                                              ),
+                                              color: AppTheme.darkGrey,
+                                              onSelected: (value) async {
+                                                if (value == 'close') {
+                                                  final result = await ApiService.closeJob(
+                                                    token: authProvider.token ?? '',
+                                                    jobId: jobId,
+                                                  );
+
+                                                  if (!context.mounted) {
+                                                    return;
+                                                  }
+
+                                                  if (result['success'] == true) {
+                                                    await _fetchJobs();
+                                                    if (!context.mounted) {
+                                                      return;
+                                                    }
+                                                    ScaffoldMessenger.of(context)
+                                                        .showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text(
+                                                          'Job closed successfully',
+                                                        ),
+                                                        backgroundColor: Colors.green,
+                                                      ),
+                                                    );
+                                                  } else {
+                                                    ScaffoldMessenger.of(context)
+                                                        .showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          (result['message'] ??
+                                                                  'Failed to close job')
+                                                              .toString(),
+                                                        ),
+                                                        backgroundColor: Colors.red,
+                                                      ),
+                                                    );
+                                                  }
+                                                  return;
+                                                }
+
+                                                if (value == 'delete') {
+                                                  final shouldDelete = await showDialog<bool>(
+                                                    context: context,
+                                                    builder: (dialogContext) => AlertDialog(
+                                                      backgroundColor:
+                                                          AppTheme.darkGrey,
+                                                      title: const Text(
+                                                        'Confirm Delete',
+                                                        style: TextStyle(
+                                                          color: AppTheme.white,
+                                                        ),
+                                                      ),
+                                                      content: const Text(
+                                                        'Are you sure you want to delete this?',
+                                                        style: TextStyle(
+                                                          color: AppTheme.grey,
+                                                        ),
+                                                      ),
+                                                      actions: [
+                                                        TextButton(
+                                                          onPressed: () =>
+                                                              Navigator.pop(
+                                                            dialogContext,
+                                                            false,
+                                                          ),
+                                                          child: const Text(
+                                                            'Cancel',
+                                                            style: TextStyle(
+                                                              color: AppTheme.grey,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        TextButton(
+                                                          onPressed: () =>
+                                                              Navigator.pop(
+                                                            dialogContext,
+                                                            true,
+                                                          ),
+                                                          child: const Text(
+                                                            'Delete',
+                                                            style: TextStyle(
+                                                              color: Colors.red,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+
+                                                  if (shouldDelete != true) {
+                                                    return;
+                                                  }
+
+                                                  final result =
+                                                      await ApiService.deleteJob(
+                                                    token: authProvider.token ?? '',
+                                                    jobId: jobId,
+                                                  );
+
+                                                  if (!context.mounted) {
+                                                    return;
+                                                  }
+
+                                                  if (result['success'] == true) {
+                                                    await _fetchJobs();
+                                                    if (!context.mounted) {
+                                                      return;
+                                                    }
+                                                    ScaffoldMessenger.of(context)
+                                                        .showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text(
+                                                          'Job deleted successfully',
+                                                        ),
+                                                        backgroundColor: Colors.green,
+                                                      ),
+                                                    );
+                                                  } else {
+                                                    ScaffoldMessenger.of(context)
+                                                        .showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          (result['message'] ??
+                                                                  'Failed to delete job')
+                                                              .toString(),
+                                                        ),
+                                                        backgroundColor: Colors.red,
+                                                      ),
+                                                    );
+                                                  }
+                                                }
+                                              },
+                                              itemBuilder: (context) => const [
+                                                PopupMenuItem<String>(
+                                                  value: 'close',
+                                                  child: Text(
+                                                    'Close Job',
+                                                    style: TextStyle(
+                                                      color: AppTheme.white,
+                                                    ),
+                                                  ),
+                                                ),
+                                                PopupMenuItem<String>(
+                                                  value: 'delete',
+                                                  child: Text(
+                                                    'Delete',
+                                                    style: TextStyle(
+                                                      color: Colors.red,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           SizedBox(
                                             height: 36,
                                             child: ElevatedButton(

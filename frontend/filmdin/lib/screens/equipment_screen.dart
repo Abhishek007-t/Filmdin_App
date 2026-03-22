@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../providers/equipment_provider.dart';
+import '../services/api_service.dart';
 import 'add_equipment_screen.dart';
 import 'equipment_detail_screen.dart';
 
@@ -171,6 +172,11 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                         final ownerName = owner['name'] ?? 'Unknown';
                         final price = (item['pricePerDay'] as num?)?.toDouble() ?? 0;
                         final category = item['category'] ?? 'Other';
+                        final currentUserId =
+                          (authProvider.user?['_id'] ?? authProvider.user?['id'] ?? '')
+                            .toString();
+                        final ownerId = (owner['_id'] ?? owner['id'] ?? '').toString();
+                        final isOwner = currentUserId.isNotEmpty && currentUserId == ownerId;
 
                         return GestureDetector(
                           onTap: () {
@@ -243,6 +249,118 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                     ],
                                   ),
                                 ),
+                                if (isOwner)
+                                  PopupMenuButton<String>(
+                                    icon: const Icon(
+                                      Icons.more_vert,
+                                      color: AppTheme.grey,
+                                    ),
+                                    color: AppTheme.darkGrey,
+                                    onSelected: (value) async {
+                                      if (value == 'edit') {
+                                        if (!context.mounted) {
+                                          return;
+                                        }
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                EquipmentDetailScreen(equipment: item),
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      if (value == 'delete') {
+                                        final shouldDelete = await showDialog<bool>(
+                                          context: context,
+                                          builder: (dialogContext) => AlertDialog(
+                                            backgroundColor: AppTheme.darkGrey,
+                                            title: const Text(
+                                              'Confirm Delete',
+                                              style: TextStyle(color: AppTheme.white),
+                                            ),
+                                            content: const Text(
+                                              'Are you sure you want to delete this?',
+                                              style: TextStyle(color: AppTheme.grey),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(dialogContext, false),
+                                                child: const Text(
+                                                  'Cancel',
+                                                  style: TextStyle(color: AppTheme.grey),
+                                                ),
+                                              ),
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(dialogContext, true),
+                                                child: const Text(
+                                                  'Delete',
+                                                  style: TextStyle(color: Colors.red),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+
+                                        if (shouldDelete != true) {
+                                          return;
+                                        }
+
+                                        final result = await ApiService.deleteEquipment(
+                                          token: authProvider.token ?? '',
+                                          equipmentId: (item['_id'] ?? '').toString(),
+                                        );
+
+                                        if (!context.mounted) {
+                                          return;
+                                        }
+
+                                        if (result['success'] == true) {
+                                          await _refresh();
+                                          if (!context.mounted) {
+                                            return;
+                                          }
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content:
+                                                  Text('Equipment deleted successfully'),
+                                              backgroundColor: Colors.green,
+                                            ),
+                                          );
+                                        } else {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                (result['message'] ??
+                                                        'Failed to delete equipment')
+                                                    .toString(),
+                                              ),
+                                              backgroundColor: Colors.red,
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    },
+                                    itemBuilder: (context) => const [
+                                      PopupMenuItem<String>(
+                                        value: 'edit',
+                                        child: Text(
+                                          'Edit',
+                                          style: TextStyle(color: AppTheme.white),
+                                        ),
+                                      ),
+                                      PopupMenuItem<String>(
+                                        value: 'delete',
+                                        child: Text(
+                                          'Delete',
+                                          style: TextStyle(color: Colors.red),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                               ],
                             ),
                           ),

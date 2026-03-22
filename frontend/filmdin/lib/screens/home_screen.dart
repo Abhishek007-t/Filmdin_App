@@ -244,12 +244,85 @@ class _FeedTabState extends State<FeedTab> {
                           itemCount: postProvider.posts.length,
                           itemBuilder: (context, index) {
                             final post = postProvider.posts[index];
+                            final currentUserId =
+                                (authProvider.user?['_id'] ?? authProvider.user?['id'] ?? '')
+                                    .toString();
+                            final postUser = post['user'] as Map<String, dynamic>? ?? {};
+                            final postUserId = (postUser['_id'] ?? postUser['id'] ?? '').toString();
+                            final canDelete =
+                                currentUserId.isNotEmpty && postUserId == currentUserId;
+
                             return _RealPostCard(
                               post: post,
+                              canDelete: canDelete,
                               onLike: () => postProvider.likePost(
                                 token: authProvider.token ?? '',
                                 postId: post['_id'],
                               ),
+                              onDelete: () async {
+                                final shouldDelete = await showDialog<bool>(
+                                  context: context,
+                                  builder: (dialogContext) => AlertDialog(
+                                    backgroundColor: AppTheme.darkGrey,
+                                    title: const Text(
+                                      'Confirm Delete',
+                                      style: TextStyle(color: AppTheme.white),
+                                    ),
+                                    content: const Text(
+                                      'Delete this post?',
+                                      style: TextStyle(color: AppTheme.grey),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(dialogContext, false),
+                                        child: const Text(
+                                          'Cancel',
+                                          style: TextStyle(color: AppTheme.grey),
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(dialogContext, true),
+                                        child: const Text(
+                                          'Delete',
+                                          style: TextStyle(color: Colors.red),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (shouldDelete != true) {
+                                  return;
+                                }
+
+                                final result = await ApiService.deletePost(
+                                  token: authProvider.token ?? '',
+                                  postId: post['_id'].toString(),
+                                );
+
+                                if (!context.mounted) {
+                                  return;
+                                }
+
+                                if (result['success'] == true) {
+                                  postProvider.removePost(post['_id'].toString());
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Post deleted successfully'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        (result['message'] ?? 'Failed to delete post').toString(),
+                                      ),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              },
                             );
                           },
                         ),
@@ -357,10 +430,14 @@ class _FeedTabState extends State<FeedTab> {
 class _RealPostCard extends StatelessWidget {
   final Map<String, dynamic> post;
   final VoidCallback onLike;
+  final bool canDelete;
+  final Future<void> Function()? onDelete;
 
   const _RealPostCard({
     required this.post,
     required this.onLike,
+    this.canDelete = false,
+    this.onDelete,
   });
 
   String _timeAgo(String dateStr) {
@@ -433,6 +510,25 @@ class _RealPostCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (canDelete)
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: AppTheme.grey),
+                  color: AppTheme.darkGrey,
+                  onSelected: (value) async {
+                    if (value == 'delete' && onDelete != null) {
+                      await onDelete!();
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Text(
+                        'Delete',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ],
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -1135,6 +1231,79 @@ class _ProfileTabState extends State<ProfileTab> {
                                     ],
                                   ),
                                 ),
+                                        IconButton(
+                                          onPressed: () async {
+                                            final shouldDelete = await showDialog<bool>(
+                                              context: context,
+                                              builder: (dialogContext) => AlertDialog(
+                                                backgroundColor: AppTheme.darkGrey,
+                                                title: const Text(
+                                                  'Confirm Delete',
+                                                  style: TextStyle(color: AppTheme.white),
+                                                ),
+                                                content: const Text(
+                                                  'Delete this credit?',
+                                                  style: TextStyle(color: AppTheme.grey),
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(dialogContext, false),
+                                                    child: const Text(
+                                                      'Cancel',
+                                                      style: TextStyle(color: AppTheme.grey),
+                                                    ),
+                                                  ),
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(dialogContext, true),
+                                                    child: const Text(
+                                                      'Delete',
+                                                      style: TextStyle(color: Colors.red),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+
+                                            if (shouldDelete != true) {
+                                              return;
+                                            }
+
+                                            final result = await ApiService.deleteCredit(
+                                              token: authProvider.token ?? '',
+                                              creditId: credit['_id'].toString(),
+                                            );
+
+                                            if (!context.mounted) {
+                                              return;
+                                            }
+
+                                            if (result['success'] == true) {
+                                              setState(() {
+                                                _refreshCounter++;
+                                              });
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text('Credit deleted successfully'),
+                                                  backgroundColor: Colors.green,
+                                                ),
+                                              );
+                                            } else {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    (result['message'] ?? 'Failed to delete credit')
+                                                        .toString(),
+                                                  ),
+                                                  backgroundColor: Colors.red,
+                                                ),
+                                              );
+                                            }
+                                          },
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.red,
+                                          ),
+                                        ),
                               ],
                             ),
                           );
