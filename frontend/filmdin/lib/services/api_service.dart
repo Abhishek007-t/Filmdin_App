@@ -13,6 +13,15 @@ static const String baseUrl = 'https://balanced-determination-production.up.rail
   );
 
   static Map<String, dynamic> _handleDioError(DioException e) {
+    if (e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.receiveTimeout ||
+        e.type == DioExceptionType.connectionError) {
+      return {
+        'success': false,
+        'message': 'No internet connection. Please check your network.',
+      };
+    }
+
     final dynamic responseData = e.response?.data;
     String message = 'Something went wrong';
 
@@ -534,10 +543,7 @@ static Future<Map<String, dynamic>> getMyStats({
     );
     return {'success': true, 'data': response.data};
   } on DioException catch (e) {
-    return {
-      'success': false,
-      'message': e.response?.data['message'] ?? 'Something went wrong',
-    };
+    return _handleDioError(e);
   }
 }
 }

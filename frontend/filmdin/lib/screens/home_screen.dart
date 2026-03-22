@@ -845,8 +845,15 @@ class _UserCard extends StatelessWidget {
 }
 
 // ─── PROFILE TAB ────────────────────────────────────────
-class ProfileTab extends StatelessWidget {
+class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
+
+  @override
+  State<ProfileTab> createState() => _ProfileTabState();
+}
+
+class _ProfileTabState extends State<ProfileTab> {
+  int _refreshCounter = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -859,7 +866,6 @@ class ProfileTab extends StatelessWidget {
       child: SingleChildScrollView(
         child: Column(
           children: [
-            // Header
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(24),
@@ -875,9 +881,7 @@ class ProfileTab extends StatelessWidget {
                     ),
                     child: Center(
                       child: Text(
-                        userName.isNotEmpty
-                            ? userName[0].toUpperCase()
-                            : 'F',
+                        userName.isNotEmpty ? userName[0].toUpperCase() : 'F',
                         style: const TextStyle(
                           color: Colors.black,
                           fontSize: 36,
@@ -897,29 +901,23 @@ class ProfileTab extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    userLocation.isNotEmpty
-                        ? '$userRole • $userLocation'
-                        : userRole,
+                    userLocation.isNotEmpty ? '$userRole • $userLocation' : userRole,
                     style: const TextStyle(
                       color: AppTheme.grey,
                       fontSize: 14,
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Real Stats
-                  FutureBuilder(
-                    future: ApiService.getMyStats(
-                      token: authProvider.token ?? '',
-                    ),
+                  FutureBuilder<Map<String, dynamic>>(
+                    key: ValueKey('stats_$_refreshCounter'),
+                    future: ApiService.getMyStats(token: authProvider.token ?? ''),
                     builder: (context, snapshot) {
                       int projects = 0;
                       int followers = 0;
                       int following = 0;
 
-                      if (snapshot.hasData &&
-                          snapshot.data!['success'] == true) {
-                        final data = snapshot.data!['data'];
+                      if (snapshot.hasData && snapshot.data!['success'] == true) {
+                        final data = snapshot.data!['data'] as Map<String, dynamic>;
                         projects = data['projectsCount'] ?? 0;
                         followers = data['followersCount'] ?? 0;
                         following = data['followingCount'] ?? 0;
@@ -928,26 +926,14 @@ class ProfileTab extends StatelessWidget {
                       return Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _StatItem(
-                            label: 'Projects',
-                            value: '$projects',
-                          ),
-                          _StatItem(
-                            label: 'Followers',
-                            value: '$followers',
-                          ),
-                          _StatItem(
-                            label: 'Following',
-                            value: '$following',
-                          ),
+                          _StatItem(label: 'Projects', value: '$projects'),
+                          _StatItem(label: 'Followers', value: '$followers'),
+                          _StatItem(label: 'Following', value: '$following'),
                         ],
                       );
                     },
                   ),
-
                   const SizedBox(height: 16),
-
-                  // Edit Profile Button
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton(
@@ -955,8 +941,7 @@ class ProfileTab extends StatelessWidget {
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) =>
-                                const EditProfileScreen(),
+                            builder: (context) => const EditProfileScreen(),
                           ),
                         );
                       },
@@ -973,8 +958,6 @@ class ProfileTab extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-
-                  // Logout Button
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton(
@@ -990,9 +973,7 @@ class ProfileTab extends StatelessWidget {
                         }
                       },
                       style: OutlinedButton.styleFrom(
-                        side: BorderSide(
-                          color: Colors.red.withOpacity(0.5),
-                        ),
+                        side: BorderSide(color: Colors.red.withOpacity(0.5)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -1006,8 +987,6 @@ class ProfileTab extends StatelessWidget {
                 ],
               ),
             ),
-
-            // Credits Section
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -1026,19 +1005,20 @@ class ProfileTab extends StatelessWidget {
                       ),
                       GestureDetector(
                         onTap: () async {
-                          await Navigator.push(
+                          final result = await Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) =>
-                                  const AddCreditScreen(),
+                              builder: (context) => const AddCreditScreen(),
                             ),
                           );
+                          if (result == true && mounted) {
+                            setState(() {
+                              _refreshCounter++;
+                            });
+                          }
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
                             color: AppTheme.gold,
                             borderRadius: BorderRadius.circular(20),
@@ -1056,24 +1036,19 @@ class ProfileTab extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  FutureBuilder(
-                    future: ApiService.getMyCredits(
-                      token: authProvider.token ?? '',
-                    ),
+                  FutureBuilder<Map<String, dynamic>>(
+                    key: ValueKey('credits_$_refreshCounter'),
+                    future: ApiService.getMyCredits(token: authProvider.token ?? ''),
                     builder: (context, snapshot) {
-                      if (snapshot.connectionState ==
-                          ConnectionState.waiting) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(
-                          child: CircularProgressIndicator(
-                            color: AppTheme.gold,
-                          ),
+                          child: CircularProgressIndicator(color: AppTheme.gold),
                         );
                       }
 
                       if (!snapshot.hasData ||
                           snapshot.data!['data'] == null ||
-                          (snapshot.data!['data']['credits'] as List)
-                              .isEmpty) {
+                          (snapshot.data!['data']['credits'] as List).isEmpty) {
                         return const Center(
                           child: Column(
                             children: [
@@ -1101,8 +1076,7 @@ class ProfileTab extends StatelessWidget {
                         );
                       }
 
-                      final credits =
-                          snapshot.data!['data']['credits'] as List;
+                      final credits = snapshot.data!['data']['credits'] as List;
                       return ListView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -1123,8 +1097,7 @@ class ProfileTab extends StatelessWidget {
                                   height: 48,
                                   decoration: BoxDecoration(
                                     color: AppTheme.gold.withOpacity(0.15),
-                                    borderRadius:
-                                        BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: const Icon(
                                     Icons.movie_outlined,
@@ -1134,8 +1107,7 @@ class ProfileTab extends StatelessWidget {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         credit['projectName'],

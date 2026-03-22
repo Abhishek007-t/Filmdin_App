@@ -152,7 +152,31 @@ class AuthProvider extends ChangeNotifier {
   // Check if already logged in
   Future<void> checkLoginStatus() async {
     final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('token');
+    final storedToken = prefs.getString('token');
+
+    if (storedToken == null || storedToken.isEmpty) {
+      _token = null;
+      notifyListeners();
+      return;
+    }
+
+    final result = await ApiService.getMyStats(token: storedToken);
+
+    if (result['success'] == true) {
+      _token = storedToken;
+    } else {
+      final message = (result['message'] ?? '').toString().toLowerCase();
+      final isNetworkError = message.contains('no internet connection');
+
+      if (isNetworkError) {
+        _token = storedToken;
+      } else {
+        _token = null;
+        _user = null;
+        await prefs.remove('token');
+      }
+    }
+
     notifyListeners();
   }
 }
