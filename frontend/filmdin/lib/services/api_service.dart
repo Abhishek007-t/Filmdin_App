@@ -519,5 +519,26 @@ static const String baseUrl = 'https://balanced-determination-production.up.rail
     } on DioException catch (e) {
       return _handleDioError(e);
     }
+    
+  }
+  // Get My Stats
+static Future<Map<String, dynamic>> getMyStats({
+  required String token,
+}) async {
+  try {
+    final response = await _dio.get(
+      '/users/stats/me',
+      options: Options(
+        headers: {'Authorization': 'Bearer $token'},
+      ),
+    );
+    return {'success': true, 'data': response.data};
+  } on DioException catch (e) {
+    return {
+      'success': false,
+      'message': e.response?.data['message'] ?? 'Something went wrong',
+    };
   }
 }
+}
+
