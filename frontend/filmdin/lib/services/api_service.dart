@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.0.109:5000/api';
+static const String baseUrl = 'https://balanced-determination-production.up.railway.app/api';
 
   static final Dio _dio = Dio(
     BaseOptions(
