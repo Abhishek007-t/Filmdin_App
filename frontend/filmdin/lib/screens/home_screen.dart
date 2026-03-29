@@ -1,10 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:video_player/video_player.dart';
 import '../theme/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../providers/post_provider.dart';
@@ -681,24 +684,7 @@ class _RealPostCard extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: mediaType == 'video'
-                  ? Container(
-                      width: double.infinity,
-                      height: 220,
-                      color: AppTheme.black,
-                      child: const Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.play_circle_fill, color: AppTheme.gold, size: 48),
-                            SizedBox(height: 8),
-                            Text(
-                              'Video post',
-                              style: TextStyle(color: AppTheme.white),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
+                  ? FeedVideoPlayer(mediaUrl: mediaUrl)
                   : (mediaUrl.startsWith('data:image')
                       ? Image.memory(
                           base64Decode(mediaUrl.split(',').last),
@@ -927,6 +913,154 @@ class _RealPostCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class FeedVideoPlayer extends StatefulWidget {
+  final String mediaUrl;
+
+  const FeedVideoPlayer({
+    super.key,
+    required this.mediaUrl,
+  });
+
+  @override
+  State<FeedVideoPlayer> createState() => _FeedVideoPlayerState();
+}
+
+class _FeedVideoPlayerState extends State<FeedVideoPlayer> {
+  VideoPlayerController? _controller;
+  bool _loading = true;
+  String? _error;
+  String? _tempPath;
+
+  @override
+  void initState() {
+    super.initState();
+    _initVideo();
+  }
+
+  Future<void> _initVideo() async {
+    try {
+      final source = widget.mediaUrl.trim();
+      if (source.isEmpty) {
+        throw Exception('Empty video source');
+      }
+
+      if (source.startsWith('data:video')) {
+        final commaIndex = source.indexOf(',');
+        if (commaIndex < 0) {
+          throw Exception('Invalid video data URL');
+        }
+
+        final rawBase64 = source.substring(commaIndex + 1);
+        final Uint8List bytes = base64Decode(rawBase64);
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/filmdin_post_${DateTime.now().microsecondsSinceEpoch}.mp4');
+        await file.writeAsBytes(bytes, flush: true);
+        _tempPath = file.path;
+        _controller = VideoPlayerController.file(file);
+      } else {
+        _controller = VideoPlayerController.networkUrl(Uri.parse(source));
+      }
+
+      await _controller!.initialize();
+      _controller!.setLooping(true);
+
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Unable to play this video';
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    if (_tempPath != null) {
+      File(_tempPath!).delete().catchError((_) {});
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return Container(
+        width: double.infinity,
+        height: 220,
+        color: AppTheme.black,
+        child: const Center(
+          child: CircularProgressIndicator(color: AppTheme.gold),
+        ),
+      );
+    }
+
+    if (_error != null || _controller == null || !_controller!.value.isInitialized) {
+      return Container(
+        width: double.infinity,
+        height: 220,
+        color: AppTheme.black,
+        child: Center(
+          child: Text(
+            _error ?? 'Unable to play this video',
+            style: const TextStyle(color: AppTheme.grey),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      height: 220,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned.fill(
+            child: FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: _controller!.value.size.width,
+                height: _controller!.value.size.height,
+                child: VideoPlayer(_controller!),
+              ),
+            ),
+          ),
+          Container(
+            color: Colors.black26,
+          ),
+          GestureDetector(
+            onTap: () {
+              if (_controller!.value.isPlaying) {
+                _controller!.pause();
+              } else {
+                _controller!.play();
+              }
+              if (mounted) {
+                setState(() {});
+              }
+            },
+            child: CircleAvatar(
+              radius: 24,
+              backgroundColor: Colors.black54,
+              child: Icon(
+                _controller!.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                color: AppTheme.white,
+                size: 28,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
 
 class ApiService {
 static const String baseUrl = 'https://balanced-determination-production.up.railway.app/api';
@@ -267,9 +269,15 @@ static const String baseUrl = 'https://balanced-determination-production.up.rail
       };
 
       if (mediaPath != null && mediaPath.trim().isNotEmpty) {
+        final detectedMime = lookupMimeType(mediaPath) ?? 'application/octet-stream';
+        final mimeParts = detectedMime.split('/');
+
         formDataMap['media'] = await MultipartFile.fromFile(
           mediaPath,
-          filename: mediaPath.split('/').last,
+          filename: mediaPath.split(RegExp(r'[\\/]+')).last,
+          contentType: mimeParts.length == 2
+              ? MediaType(mimeParts[0], mimeParts[1])
+              : MediaType('application', 'octet-stream'),
         );
       }
 
