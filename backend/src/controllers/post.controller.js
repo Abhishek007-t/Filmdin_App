@@ -7,10 +7,12 @@ const populatePost = (query) => query
 const toFeedPost = (postDoc, currentUserId) => {
   const post = postDoc.toObject();
   const likes = Array.isArray(post.likes) ? post.likes : [];
+  const comments = Array.isArray(post.comments) ? post.comments : [];
 
   return {
     ...post,
     likesCount: likes.length,
+    commentsCount: comments.length,
     isLiked: likes.some((id) => id.toString() === currentUserId),
   };
 };
