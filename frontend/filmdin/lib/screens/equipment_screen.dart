@@ -209,7 +209,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                   width: 42,
                                   height: 42,
                                   decoration: BoxDecoration(
-                                    color: AppTheme.gold.withOpacity(0.2),
+                                    color: AppTheme.gold.withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Icon(

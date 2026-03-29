@@ -89,10 +89,10 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: AppTheme.gold.withOpacity(0.15),
+                          color: AppTheme.gold.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: AppTheme.gold.withOpacity(0.3),
+                            color: AppTheme.gold.withValues(alpha: 0.3),
                           ),
                         ),
                         child: Text(

@@ -988,7 +988,7 @@ class _FeedVideoPlayerState extends State<FeedVideoPlayer> {
   void dispose() {
     _controller?.dispose();
     if (_tempPath != null) {
-      File(_tempPath!).delete().catchError((_) {});
+      File(_tempPath!).delete().catchError((_) => File(_tempPath!));
     }
     super.dispose();
   }
@@ -1567,7 +1567,7 @@ class _ProfileTabState extends State<ProfileTab> {
                         }
                       },
                       style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.red.withOpacity(0.5)),
+                        side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -1699,7 +1699,7 @@ class _ProfileTabState extends State<ProfileTab> {
                                   width: 48,
                                   height: 48,
                                   decoration: BoxDecoration(
-                                    color: AppTheme.gold.withOpacity(0.15),
+                                    color: AppTheme.gold.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: const Icon(

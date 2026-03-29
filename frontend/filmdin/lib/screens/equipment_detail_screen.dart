@@ -53,7 +53,7 @@ class EquipmentDetailScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            _buildBadge(category, AppTheme.gold.withOpacity(0.2), AppTheme.gold),
+            _buildBadge(category, AppTheme.gold.withValues(alpha: 0.2), AppTheme.gold),
             const SizedBox(height: 20),
 
             Container(

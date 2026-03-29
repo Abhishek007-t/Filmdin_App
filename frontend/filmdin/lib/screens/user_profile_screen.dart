@@ -323,8 +323,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                           width: 48,
                                           height: 48,
                                           decoration: BoxDecoration(
-                                            color: AppTheme.gold.withOpacity(
-                                              0.15,
+                                            color: AppTheme.gold.withValues(
+                                              alpha: 0.15,
                                             ),
                                             borderRadius: BorderRadius.circular(
                                               12,

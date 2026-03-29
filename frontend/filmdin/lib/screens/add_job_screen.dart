@@ -204,7 +204,9 @@ class _AddJobScreenState extends State<AddJobScreen> {
 
                         setState(() => isLoading = false);
 
-                        if (success && context.mounted) {
+                        if (!mounted) return;
+
+                        if (success) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Job posted successfully!'),

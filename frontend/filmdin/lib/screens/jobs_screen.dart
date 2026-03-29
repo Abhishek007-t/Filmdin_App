@@ -141,7 +141,7 @@ class _JobsScreenState extends State<JobsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 scrollDirection: Axis.horizontal,
                 itemCount: _filters.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                separatorBuilder: (context, index) => const SizedBox(width: 8),
                 itemBuilder: (context, index) {
                   final type = _filters[index];
                   final selected = jobProvider.selectedJobType == type;
@@ -249,7 +249,7 @@ class _JobsScreenState extends State<JobsScreen> {
                                           vertical: 4,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: AppTheme.gold.withOpacity(0.15),
+                                          color: AppTheme.gold.withValues(alpha: 0.15),
                                           borderRadius:
                                               BorderRadius.circular(14),
                                         ),
@@ -311,7 +311,7 @@ class _JobsScreenState extends State<JobsScreen> {
                                                   ),
                                                   decoration: BoxDecoration(
                                                     color: Colors.green
-                                                        .withOpacity(0.15),
+                                                        .withValues(alpha: 0.15),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                       10,

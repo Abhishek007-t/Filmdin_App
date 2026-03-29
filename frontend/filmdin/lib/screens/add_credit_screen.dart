@@ -182,7 +182,9 @@ class _AddCreditScreenState extends State<AddCreditScreen> {
 
                         setState(() => isLoading = false);
 
-                        if (result['success'] && context.mounted) {
+                        if (!mounted) return;
+
+                        if (result['success']) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Credit added successfully!'),
