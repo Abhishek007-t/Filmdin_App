@@ -109,6 +109,9 @@ exports.login = async (req, res) => {
 exports.forgotPassword = async (req, res) => {
   try {
     const email = (req.body.email || '').toString().trim().toLowerCase();
+    const genericResponse = {
+      message: 'If that email exists, password reset instructions were sent',
+    };
 
     if (!email) {
       return res.status(400).json({ message: 'Email is required' });
@@ -129,7 +132,8 @@ exports.forgotPassword = async (req, res) => {
 
       const transporter = getEmailTransporter();
       if (!transporter) {
-        return res.status(500).json({ message: 'Email service is not configured' });
+        console.error('Forgot password email skipped: SMTP is not configured');
+        return res.json(genericResponse);
       }
 
       const appUrl = process.env.APP_URL || 'https://filmdin.app';
@@ -148,12 +152,15 @@ exports.forgotPassword = async (req, res) => {
         setTimeout(() => reject(new Error('Email send timeout')), 15000);
       });
 
-      await Promise.race([mailPromise, timeoutPromise]);
+      try {
+        await Promise.race([mailPromise, timeoutPromise]);
+      } catch (mailError) {
+        console.error('Forgot password email send failed:', mailError.message);
+        return res.json(genericResponse);
+      }
     }
 
-    return res.json({
-      message: 'If that email exists, password reset instructions were sent',
-    });
+    return res.json(genericResponse);
   } catch (error) {
     return res.status(500).json({
       message: 'Server error',
