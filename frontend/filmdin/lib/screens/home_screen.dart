@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
@@ -957,16 +959,42 @@ class ProfileTab extends StatefulWidget {
 class _ProfileTabState extends State<ProfileTab> {
   int _refreshCounter = 0;
 
+  ImageProvider<Object>? _avatarImageProvider(dynamic profilePhoto) {
+    final photo = (profilePhoto ?? '').toString().trim();
+    if (photo.isEmpty) return null;
+
+    if (photo.startsWith('data:image')) {
+      final parts = photo.split(',');
+      if (parts.length == 2) {
+        try {
+          return MemoryImage(base64Decode(parts[1]));
+        } catch (_) {
+          return null;
+        }
+      }
+      return null;
+    }
+
+    return NetworkImage(photo);
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final userName = authProvider.user?['name'] ?? 'Your Name';
     final userRole = authProvider.user?['role'] ?? 'Filmmaker';
     final userLocation = authProvider.user?['location'] ?? '';
+    final avatarImage = _avatarImageProvider(authProvider.user?['profilePhoto']);
 
     return SafeArea(
-      child: SingleChildScrollView(
-        child: Column(
+      child: RefreshIndicator(
+        onRefresh: () async {
+          setState(() {
+            _refreshCounter++;
+          });
+        },
+        child: SingleChildScrollView(
+          child: Column(
           children: [
             Container(
               width: double.infinity,
@@ -980,17 +1008,22 @@ class _ProfileTabState extends State<ProfileTab> {
                     decoration: BoxDecoration(
                       color: AppTheme.gold,
                       borderRadius: BorderRadius.circular(45),
+                      image: avatarImage != null
+                          ? DecorationImage(image: avatarImage, fit: BoxFit.cover)
+                          : null,
                     ),
-                    child: Center(
-                      child: Text(
-                        userName.isNotEmpty ? userName[0].toUpperCase() : 'F',
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                    child: avatarImage == null
+                        ? Center(
+                            child: Text(
+                              userName.isNotEmpty ? userName[0].toUpperCase() : 'F',
+                              style: const TextStyle(
+                                color: Colors.black,
+                                fontSize: 36,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          )
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -1326,6 +1359,7 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
             ),
           ],
+          ),
         ),
       ),
     );

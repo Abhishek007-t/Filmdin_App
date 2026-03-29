@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
@@ -14,9 +18,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController bioController = TextEditingController();
   final TextEditingController locationController = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
 
   bool isSaving = false;
   String selectedRole = 'Director';
+  String? _selectedPhotoPath;
+  Uint8List? _selectedPhotoBytes;
 
   final List<String> roles = [
     'Director',
@@ -72,6 +79,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         bio: bioController.text.trim(),
         location: locationController.text.trim(),
         role: selectedRole,
+        profilePhotoPath: _selectedPhotoPath,
       );
 
       if (!mounted) return;
@@ -108,6 +116,45 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  Future<void> _pickProfilePhoto() async {
+    final picked = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+      maxWidth: 1280,
+      maxHeight: 1280,
+    );
+    if (!mounted || picked == null) return;
+    final bytes = await picked.readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      _selectedPhotoPath = picked.path;
+      _selectedPhotoBytes = bytes;
+    });
+  }
+
+  ImageProvider<Object>? _avatarImageProvider(dynamic profilePhoto) {
+    if (_selectedPhotoBytes != null) {
+      return MemoryImage(_selectedPhotoBytes!);
+    }
+
+    final photo = (profilePhoto ?? '').toString().trim();
+    if (photo.isEmpty) return null;
+
+    if (photo.startsWith('data:image')) {
+      final parts = photo.split(',');
+      if (parts.length == 2) {
+        try {
+          return MemoryImage(base64Decode(parts[1]));
+        } catch (_) {
+          return null;
+        }
+      }
+      return null;
+    }
+
+    return NetworkImage(photo);
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -115,6 +162,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final displayName = nameController.text.trim().isNotEmpty
         ? nameController.text.trim()
         : (user['name'] ?? 'F').toString();
+    final avatarImage = _avatarImageProvider(user['profilePhoto']);
 
     return Scaffold(
       backgroundColor: AppTheme.black,
@@ -165,34 +213,42 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     decoration: BoxDecoration(
                       color: AppTheme.gold,
                       borderRadius: BorderRadius.circular(45),
+                      image: avatarImage != null
+                          ? DecorationImage(image: avatarImage, fit: BoxFit.cover)
+                          : null,
                     ),
-                    child: Center(
-                      child: Text(
-                        displayName.isNotEmpty
-                            ? displayName[0].toUpperCase()
-                            : 'F',
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontSize: 34,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                    child: avatarImage == null
+                        ? Center(
+                            child: Text(
+                              displayName.isNotEmpty
+                                  ? displayName[0].toUpperCase()
+                                  : 'F',
+                              style: const TextStyle(
+                                color: Colors.black,
+                                fontSize: 34,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          )
+                        : null,
                   ),
                   Positioned(
                     right: 0,
                     bottom: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: AppTheme.darkGrey,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppTheme.gold, width: 1),
-                      ),
-                      child: const Icon(
-                        Icons.edit,
-                        size: 14,
-                        color: AppTheme.gold,
+                    child: GestureDetector(
+                      onTap: _pickProfilePhoto,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppTheme.darkGrey,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppTheme.gold, width: 1),
+                        ),
+                        child: const Icon(
+                          Icons.edit,
+                          size: 14,
+                          color: AppTheme.gold,
+                        ),
                       ),
                     ),
                   ),

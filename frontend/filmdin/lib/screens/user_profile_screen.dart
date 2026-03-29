@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
@@ -24,6 +26,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool isLoading = true;
   bool isFollowLoading = false;
   bool isFollowing = false;
+
+  ImageProvider<Object>? _avatarImageProvider(dynamic profilePhoto) {
+    final photo = (profilePhoto ?? '').toString().trim();
+    if (photo.isEmpty) return null;
+
+    if (photo.startsWith('data:image')) {
+      final parts = photo.split(',');
+      if (parts.length == 2) {
+        try {
+          return MemoryImage(base64Decode(parts[1]));
+        } catch (_) {
+          return null;
+        }
+      }
+      return null;
+    }
+
+    return NetworkImage(photo);
+  }
 
   @override
   void initState() {
@@ -103,6 +124,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final isOwnProfile = widget.userId == authProvider.user?['_id'];
+    final avatarImage = _avatarImageProvider(userData?['profilePhoto']);
 
     return Scaffold(
       backgroundColor: AppTheme.black,
@@ -146,17 +168,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           decoration: BoxDecoration(
                             color: AppTheme.gold,
                             borderRadius: BorderRadius.circular(45),
+                            image: avatarImage != null
+                                ? DecorationImage(image: avatarImage, fit: BoxFit.cover)
+                                : null,
                           ),
-                          child: Center(
-                            child: Text(
-                              (userData!['name'] ?? 'F')[0].toUpperCase(),
-                              style: const TextStyle(
-                                color: Colors.black,
-                                fontSize: 36,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
+                          child: avatarImage == null
+                              ? Center(
+                                  child: Text(
+                                    (userData!['name'] ?? 'F')[0].toUpperCase(),
+                                    style: const TextStyle(
+                                      color: Colors.black,
+                                      fontSize: 36,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                )
+                              : null,
                         ),
                         const SizedBox(height: 16),
                         Text(

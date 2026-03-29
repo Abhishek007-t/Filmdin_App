@@ -70,12 +70,59 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  // Forgot password
+  Future<bool> forgotPassword({required String email}) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final result = await ApiService.forgotPassword(email: email);
+
+    _isLoading = false;
+
+    if (result['success']) {
+      notifyListeners();
+      return true;
+    } else {
+      _errorMessage = result['message'];
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // Reset password
+  Future<bool> resetPassword({
+    required String token,
+    required String password,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final result = await ApiService.resetPassword(
+      token: token,
+      password: password,
+    );
+
+    _isLoading = false;
+
+    if (result['success']) {
+      notifyListeners();
+      return true;
+    } else {
+      _errorMessage = result['message'];
+      notifyListeners();
+      return false;
+    }
+  }
+
   // Update profile
   Future<bool> updateProfile({
     required String name,
     required String bio,
     required String location,
     required String role,
+    String? profilePhotoPath,
   }) async {
     if (_token == null || _token!.isEmpty) {
       _errorMessage = 'User is not authenticated';
@@ -94,6 +141,7 @@ class AuthProvider extends ChangeNotifier {
         bio: bio,
         location: location,
         role: role,
+        profilePhotoPath: profilePhotoPath,
       );
 
       _isLoading = false;

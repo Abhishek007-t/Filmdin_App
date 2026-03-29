@@ -77,6 +77,37 @@ static const String baseUrl = 'https://balanced-determination-production.up.rail
     }
   }
 
+  // Forgot Password
+  static Future<Map<String, dynamic>> forgotPassword({
+    required String email,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/auth/forgot-password',
+        data: {'email': email},
+      );
+      return {'success': true, 'data': response.data};
+    } on DioException catch (e) {
+      return _handleDioError(e);
+    }
+  }
+
+  // Reset Password
+  static Future<Map<String, dynamic>> resetPassword({
+    required String token,
+    required String password,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/auth/reset-password',
+        data: {'token': token, 'password': password},
+      );
+      return {'success': true, 'data': response.data};
+    } on DioException catch (e) {
+      return _handleDioError(e);
+    }
+  }
+
   // Update Profile
   static Future<Map<String, dynamic>> updateProfile({
     required String token,
@@ -84,12 +115,30 @@ static const String baseUrl = 'https://balanced-determination-production.up.rail
     required String bio,
     required String location,
     required String role,
+    String? profilePhotoPath,
   }) async {
     try {
+      final Map<String, dynamic> formDataMap = {
+        'name': name,
+        'bio': bio,
+        'location': location,
+        'role': role,
+      };
+
+      if (profilePhotoPath != null && profilePhotoPath.trim().isNotEmpty) {
+        formDataMap['profilePhoto'] = await MultipartFile.fromFile(
+          profilePhotoPath,
+          filename: profilePhotoPath.split('/').last,
+        );
+      }
+
       final response = await _dio.put(
         '/users/profile',
-        data: {'name': name, 'bio': bio, 'location': location, 'role': role},
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
+        data: FormData.fromMap(formDataMap),
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          contentType: Headers.multipartFormDataContentType,
+        ),
       );
       return {'success': true, 'data': response.data};
     } on DioException catch (e) {
