@@ -14,6 +14,8 @@ const userSchema = new mongoose.Schema({
   bio: { type: String, default: '' },
   location: { type: String, default: '' },
   profilePhoto: { type: String, default: '' },
+  resetPasswordToken: { type: String, default: null },
+  resetPasswordExpires: { type: Date, default: null },
   followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 }, { timestamps: true });
