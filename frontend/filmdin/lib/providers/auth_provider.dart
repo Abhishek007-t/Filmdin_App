@@ -212,9 +212,20 @@ class AuthProvider extends ChangeNotifier {
 
     if (result['success'] == true) {
       _token = storedToken;
+      final statsUser = result['data']?['user'] as Map<String, dynamic>?;
+      if (statsUser != null) {
+        _user = {
+          ...statsUser,
+          'id': (statsUser['id'] ?? statsUser['_id'])?.toString(),
+          '_id': (statsUser['_id'] ?? statsUser['id'])?.toString(),
+        };
+      }
     } else {
       final message = (result['message'] ?? '').toString().toLowerCase();
-      final isNetworkError = message.contains('no internet connection');
+      final isNetworkError =
+          message.contains('no internet connection') ||
+          message.contains('unable to reach server') ||
+          message.contains('taking too long to respond');
 
       if (isNetworkError) {
         _token = storedToken;

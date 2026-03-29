@@ -57,6 +57,9 @@ exports.register = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        bio: user.bio,
+        location: user.location,
+        profilePhoto: user.profilePhoto,
       },
     });
   } catch (error) {
@@ -95,6 +98,9 @@ exports.login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        bio: user.bio,
+        location: user.location,
+        profilePhoto: user.profilePhoto,
       },
     });
   } catch (error) {
@@ -144,8 +150,8 @@ exports.forgotPassword = async (req, res) => {
         from,
         to: user.email,
         subject: 'Password Reset',
-        text: `You requested a password reset.\n\nReset Password: ${resetLink}`,
-        html: `<p>You requested a password reset.</p><p><a href="${resetLink}">Reset Password</a></p>`,
+        text: `You requested a password reset.\n\nReset link: ${resetLink}\n\nReset token: ${rawToken}`,
+        html: `<p>You requested a password reset.</p><p><a href="${resetLink}">Reset Password</a></p><p>Reset token: <strong>${rawToken}</strong></p>`,
       });
 
       const timeoutPromise = new Promise((_, reject) => {
