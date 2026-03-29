@@ -143,9 +143,9 @@ exports.forgotPassword = async (req, res) => {
       const mailPromise = transporter.sendMail({
         from,
         to: user.email,
-        subject: 'Filmdin Password Reset',
-        text: `We received a request to reset your Filmdin password.\n\nUse this link: ${resetLink}\n\nOr use this token in the app: ${rawToken}\n\nThis token expires in 1 hour.`,
-        html: `<p>We received a request to reset your Filmdin password.</p><p><a href="${resetLink}">Reset Password</a></p><p>Or use this token in the app:</p><p><strong>${rawToken}</strong></p><p>This token expires in 1 hour.</p>`,
+        subject: 'Password Reset',
+        text: `You requested a password reset.\n\nReset Password: ${resetLink}`,
+        html: `<p>You requested a password reset.</p><p><a href="${resetLink}">Reset Password</a></p>`,
       });
 
       const timeoutPromise = new Promise((_, reject) => {
