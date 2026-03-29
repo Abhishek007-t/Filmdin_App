@@ -19,6 +19,9 @@ const getEmailTransporter = () => {
     port,
     secure: port === 465,
     auth: { user, pass },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 };
 
@@ -133,13 +136,19 @@ exports.forgotPassword = async (req, res) => {
       const resetLink = `${appUrl}/reset-password?token=${rawToken}`;
       const from = process.env.SMTP_FROM || process.env.SMTP_USER;
 
-      await transporter.sendMail({
+      const mailPromise = transporter.sendMail({
         from,
         to: user.email,
         subject: 'Filmdin Password Reset',
         text: `We received a request to reset your Filmdin password.\n\nUse this link: ${resetLink}\n\nOr use this token in the app: ${rawToken}\n\nThis token expires in 1 hour.`,
         html: `<p>We received a request to reset your Filmdin password.</p><p><a href="${resetLink}">Reset Password</a></p><p>Or use this token in the app:</p><p><strong>${rawToken}</strong></p><p>This token expires in 1 hour.</p>`,
       });
+
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Email send timeout')), 15000);
+      });
+
+      await Promise.race([mailPromise, timeoutPromise]);
     }
 
     return res.json({
