@@ -77,14 +77,28 @@ exports.updateProfile = async (req, res) => {
       return res.status(400).json({ message: 'Name is required' });
     }
 
+    let profilePhoto;
+    if (req.file) {
+      if (!req.file.mimetype || !req.file.mimetype.startsWith('image/')) {
+        return res.status(400).json({ message: 'Only image files are allowed' });
+      }
+      profilePhoto = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    }
+
+    const updateData = {
+      name: name.trim(),
+      bio: bio ?? '',
+      location: location ?? '',
+      role,
+    };
+
+    if (profilePhoto) {
+      updateData.profilePhoto = profilePhoto;
+    }
+
     const updatedUser = await User.findByIdAndUpdate(
       req.userId,
-      {
-        name: name.trim(),
-        bio: bio ?? '',
-        location: location ?? '',
-        role,
-      },
+      updateData,
       { new: true, runValidators: true },
     ).select('-password');
 
