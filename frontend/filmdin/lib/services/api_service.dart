@@ -6,19 +6,54 @@ static const String baseUrl = 'https://balanced-determination-production.up.rail
   static final Dio _dio = Dio(
     BaseOptions(
       baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
+      // Railway can cold-start; use a longer timeout to avoid failing early.
+      connectTimeout: const Duration(seconds: 45),
+      receiveTimeout: const Duration(seconds: 45),
       headers: {'Content-Type': 'application/json'},
     ),
   );
 
+  static Future<Response<dynamic>> _postWithRetry(
+    String path, {
+    dynamic data,
+    Options? options,
+  }) async {
+    try {
+      return await _dio.post(path, data: data, options: options);
+    } on DioException catch (e) {
+      final shouldRetry =
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.connectionError;
+
+      if (!shouldRetry) rethrow;
+
+      // Single retry for transient cold-start/connectivity blips.
+      await Future.delayed(const Duration(seconds: 2));
+      return _dio.post(path, data: data, options: options);
+    }
+  }
+
   static Map<String, dynamic> _handleDioError(DioException e) {
     if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.receiveTimeout ||
-        e.type == DioExceptionType.connectionError) {
+        e.type == DioExceptionType.receiveTimeout) {
       return {
         'success': false,
-        'message': 'No internet connection. Please check your network.',
+        'message': 'Server is taking too long to respond. Please try again.',
+      };
+    }
+
+    if (e.type == DioExceptionType.connectionError) {
+      final errorText = (e.message ?? '').toLowerCase();
+      final isLikelyOffline =
+          errorText.contains('failed host lookup') ||
+          errorText.contains('network is unreachable');
+
+      return {
+        'success': false,
+        'message': isLikelyOffline
+            ? 'No internet connection. Please check your network.'
+            : 'Unable to reach server right now. Please try again.',
       };
     }
 
@@ -46,7 +81,7 @@ static const String baseUrl = 'https://balanced-determination-production.up.rail
     required String role,
   }) async {
     try {
-      final response = await _dio.post(
+      final response = await _postWithRetry(
         '/auth/register',
         data: {
           'name': name,
@@ -67,7 +102,7 @@ static const String baseUrl = 'https://balanced-determination-production.up.rail
     required String password,
   }) async {
     try {
-      final response = await _dio.post(
+      final response = await _postWithRetry(
         '/auth/login',
         data: {'email': email, 'password': password},
       );
@@ -82,7 +117,7 @@ static const String baseUrl = 'https://balanced-determination-production.up.rail
     required String email,
   }) async {
     try {
-      final response = await _dio.post(
+      final response = await _postWithRetry(
         '/auth/forgot-password',
         data: {'email': email},
       );
@@ -98,7 +133,7 @@ static const String baseUrl = 'https://balanced-determination-production.up.rail
     required String password,
   }) async {
     try {
-      final response = await _dio.post(
+      final response = await _postWithRetry(
         '/auth/reset-password',
         data: {'token': token, 'password': password},
       );
@@ -224,12 +259,27 @@ static const String baseUrl = 'https://balanced-determination-production.up.rail
   static Future<Map<String, dynamic>> createPost({
     required String token,
     required String content,
+    String? mediaPath,
   }) async {
     try {
+      final Map<String, dynamic> formDataMap = {
+        'content': content,
+      };
+
+      if (mediaPath != null && mediaPath.trim().isNotEmpty) {
+        formDataMap['media'] = await MultipartFile.fromFile(
+          mediaPath,
+          filename: mediaPath.split('/').last,
+        );
+      }
+
       final response = await _dio.post(
         '/posts',
-        data: {'content': content},
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
+        data: FormData.fromMap(formDataMap),
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          contentType: Headers.multipartFormDataContentType,
+        ),
       );
       return {'success': true, 'data': response.data};
     } on DioException catch (e) {
@@ -260,6 +310,24 @@ static const String baseUrl = 'https://balanced-determination-production.up.rail
     try {
       final response = await _dio.put(
         '/posts/like/$postId',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      return {'success': true, 'data': response.data};
+    } on DioException catch (e) {
+      return _handleDioError(e);
+    }
+  }
+
+  // Add Comment
+  static Future<Map<String, dynamic>> addComment({
+    required String token,
+    required String postId,
+    required String text,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/posts/comment/$postId',
+        data: {'text': text},
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
       return {'success': true, 'data': response.data};

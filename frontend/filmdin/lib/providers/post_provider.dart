@@ -27,10 +27,12 @@ class PostProvider extends ChangeNotifier {
   Future<bool> createPost({
     required String token,
     required String content,
+    String? mediaPath,
   }) async {
     final result = await ApiService.createPost(
       token: token,
       content: content,
+      mediaPath: mediaPath,
     );
 
     if (result['success']) {
@@ -39,6 +41,32 @@ class PostProvider extends ChangeNotifier {
       return true;
     }
     return false;
+  }
+
+  // Add Comment
+  Future<List<dynamic>?> addComment({
+    required String token,
+    required String postId,
+    required String text,
+  }) async {
+    final result = await ApiService.addComment(
+      token: token,
+      postId: postId,
+      text: text,
+    );
+
+    if (result['success']) {
+      final index = _posts.indexWhere((p) => p['_id'] == postId);
+      if (index != -1) {
+        final comments = result['data']['comments'] as List<dynamic>? ?? [];
+        _posts[index]['comments'] = comments;
+        _posts[index]['commentsCount'] = result['data']['commentsCount'] ?? comments.length;
+        notifyListeners();
+        return comments;
+      }
+    }
+
+    return null;
   }
 
   // Like Post

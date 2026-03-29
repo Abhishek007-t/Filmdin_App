@@ -1,11 +1,15 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../theme/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../providers/post_provider.dart';
 import '../services/api_service.dart';
+import '../widgets/loading_skeleton.dart';
 import 'login_screen.dart';
 import 'add_credit_screen.dart';
 import 'user_profile_screen.dart';
@@ -20,6 +24,26 @@ bool isOwner(dynamic ownerId, String? currentUserId) {
     return (ownerId['_id'] ?? ownerId['id'])?.toString() == currentUserId;
   }
   return ownerId.toString() == currentUserId;
+}
+
+ImageProvider<Object>? profileImageProvider(dynamic profilePhoto) {
+  if (profilePhoto == null) return null;
+
+  final String value = profilePhoto.toString().trim();
+  if (value.isEmpty) return null;
+
+  if (value.startsWith('data:image')) {
+    final commaIndex = value.indexOf(',');
+    if (commaIndex == -1) return null;
+    final raw = value.substring(commaIndex + 1);
+    return MemoryImage(base64Decode(raw));
+  }
+
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    return NetworkImage(value);
+  }
+
+  return null;
 }
 
 class HomeScreen extends StatefulWidget {
@@ -101,6 +125,7 @@ class FeedTab extends StatefulWidget {
 
 class _FeedTabState extends State<FeedTab> {
   final TextEditingController _postController = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -116,6 +141,7 @@ class _FeedTabState extends State<FeedTab> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final postProvider = Provider.of<PostProvider>(context);
+    final composerAvatar = profileImageProvider(authProvider.user?['profilePhoto']);
 
     return SafeArea(
       child: Column(
@@ -165,16 +191,21 @@ class _FeedTabState extends State<FeedTab> {
                   decoration: BoxDecoration(
                     color: AppTheme.gold,
                     borderRadius: BorderRadius.circular(20),
+                    image: composerAvatar != null
+                        ? DecorationImage(image: composerAvatar, fit: BoxFit.cover)
+                        : null,
                   ),
-                  child: Center(
-                    child: Text(
-                      (authProvider.user?['name'] ?? 'F')[0].toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+                  child: composerAvatar == null
+                      ? Center(
+                          child: Text(
+                            (authProvider.user?['name'] ?? 'F')[0].toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        )
+                      : null,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -212,10 +243,10 @@ class _FeedTabState extends State<FeedTab> {
           // Posts List
           Expanded(
             child: postProvider.isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      color: AppTheme.gold,
-                    ),
+                ? const SkeletonList(
+                    itemCount: 5,
+                    itemHeight: 130,
+                    padding: EdgeInsets.symmetric(horizontal: 16),
                   )
                 : postProvider.posts.isEmpty
                     ? const Center(
@@ -266,6 +297,11 @@ class _FeedTabState extends State<FeedTab> {
                               onLike: () => postProvider.likePost(
                                 token: authProvider.token ?? '',
                                 postId: post['_id'],
+                              ),
+                              onComment: (text) => postProvider.addComment(
+                                token: authProvider.token ?? '',
+                                postId: post['_id'].toString(),
+                                text: text,
                               ),
                               onDelete: () async {
                                 final shouldDelete = await showDialog<bool>(
@@ -346,6 +382,9 @@ class _FeedTabState extends State<FeedTab> {
     AuthProvider authProvider,
     PostProvider postProvider,
   ) {
+    String? selectedMediaPath;
+    bool selectedIsVideo = false;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: AppTheme.darkGrey,
@@ -353,81 +392,159 @@ class _FeedTabState extends State<FeedTab> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 16,
-          right: 16,
-          top: 16,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Create Post',
-                  style: TextStyle(
-                    color: AppTheme.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 16,
+            right: 16,
+            top: 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Create Post',
+                    style: TextStyle(
+                      color: AppTheme.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: AppTheme.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _postController,
+                maxLines: 4,
+                autofocus: true,
+                style: const TextStyle(color: AppTheme.white),
+                decoration: InputDecoration(
+                  hintText: 'What is on your mind?',
+                  hintStyle: const TextStyle(color: AppTheme.grey),
+                  filled: true,
+                  fillColor: AppTheme.black,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close, color: AppTheme.white),
-                  onPressed: () => Navigator.pop(context),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: () async {
+                      final picked = await _picker.pickImage(source: ImageSource.gallery);
+                      if (picked != null) {
+                        setSheetState(() {
+                          selectedMediaPath = picked.path;
+                          selectedIsVideo = false;
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.image_outlined, color: AppTheme.gold),
+                    label: const Text('Image', style: TextStyle(color: AppTheme.gold)),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: () async {
+                      final picked = await _picker.pickVideo(source: ImageSource.gallery);
+                      if (picked != null) {
+                        setSheetState(() {
+                          selectedMediaPath = picked.path;
+                          selectedIsVideo = true;
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.videocam_outlined, color: AppTheme.gold),
+                    label: const Text('Video', style: TextStyle(color: AppTheme.gold)),
+                  ),
+                  if (selectedMediaPath != null)
+                    IconButton(
+                      onPressed: () {
+                        setSheetState(() {
+                          selectedMediaPath = null;
+                          selectedIsVideo = false;
+                        });
+                      },
+                      icon: const Icon(Icons.close, color: AppTheme.grey),
+                    ),
+                ],
+              ),
+              if (selectedMediaPath != null) ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: selectedIsVideo
+                      ? Container(
+                          width: double.infinity,
+                          height: 160,
+                          color: AppTheme.black,
+                          child: const Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.play_circle_fill, color: AppTheme.gold, size: 44),
+                                SizedBox(height: 8),
+                                Text('Video selected', style: TextStyle(color: AppTheme.white)),
+                              ],
+                            ),
+                          ),
+                        )
+                      : Image.file(
+                          File(selectedMediaPath!),
+                          height: 160,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
                 ),
               ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _postController,
-              maxLines: 4,
-              autofocus: true,
-              style: const TextStyle(color: AppTheme.white),
-              decoration: InputDecoration(
-                hintText: 'What is on your mind?',
-                hintStyle: const TextStyle(color: AppTheme.grey),
-                filled: true,
-                fillColor: AppTheme.black,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  if (_postController.text.trim().isEmpty) return;
-                  final success = await postProvider.createPost(
-                    token: authProvider.token ?? '',
-                    content: _postController.text.trim(),
-                  );
-                  if (success && context.mounted) {
-                    _postController.clear();
-                    Navigator.pop(context);
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.gold,
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final content = _postController.text.trim();
+                    if (content.isEmpty && selectedMediaPath == null) {
+                      return;
+                    }
+
+                    final success = await postProvider.createPost(
+                      token: authProvider.token ?? '',
+                      content: content,
+                      mediaPath: selectedMediaPath,
+                    );
+
+                    if (success && context.mounted) {
+                      _postController.clear();
+                      Navigator.pop(context);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.gold,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Post',
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
-                child: const Text(
-                  'Post',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
               ),
-            ),
-            const SizedBox(height: 16),
-          ],
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );
@@ -438,12 +555,14 @@ class _FeedTabState extends State<FeedTab> {
 class _RealPostCard extends StatelessWidget {
   final Map<String, dynamic> post;
   final VoidCallback onLike;
+  final Future<List<dynamic>?> Function(String text)? onComment;
   final bool canDelete;
   final Future<void> Function()? onDelete;
 
   const _RealPostCard({
     required this.post,
     required this.onLike,
+    this.onComment,
     this.canDelete = false,
     this.onDelete,
   });
@@ -461,9 +580,13 @@ class _RealPostCard extends StatelessWidget {
     final user = post['user'] as Map<String, dynamic>? ?? {};
     final name = user['name'] ?? 'Unknown';
     final role = user['role'] ?? 'Filmmaker';
+    final avatar = profileImageProvider(user['profilePhoto']);
+    final mediaUrl = (post['imageUrl'] ?? '').toString();
+    final mediaType = (post['mediaType'] ?? '').toString();
     final likes = post['likes'] as List? ?? [];
     final isLiked = post['isLiked'] ?? false;
     final likesCount = post['likesCount'] ?? likes.length;
+    final commentsCount = post['commentsCount'] ?? (post['comments'] as List? ?? []).length;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -483,17 +606,22 @@ class _RealPostCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppTheme.gold,
                   borderRadius: BorderRadius.circular(22),
+                  image: avatar != null
+                      ? DecorationImage(image: avatar, fit: BoxFit.cover)
+                      : null,
                 ),
-                child: Center(
-                  child: Text(
-                    name.isNotEmpty ? name[0].toUpperCase() : 'F',
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-                ),
+                child: avatar == null
+                    ? Center(
+                        child: Text(
+                          name.isNotEmpty ? name[0].toUpperCase() : 'F',
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -548,6 +676,44 @@ class _RealPostCard extends StatelessWidget {
               height: 1.5,
             ),
           ),
+          if (mediaUrl.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: mediaType == 'video'
+                  ? Container(
+                      width: double.infinity,
+                      height: 220,
+                      color: AppTheme.black,
+                      child: const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.play_circle_fill, color: AppTheme.gold, size: 48),
+                            SizedBox(height: 8),
+                            Text(
+                              'Video post',
+                              style: TextStyle(color: AppTheme.white),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : (mediaUrl.startsWith('data:image')
+                      ? Image.memory(
+                          base64Decode(mediaUrl.split(',').last),
+                          width: double.infinity,
+                          height: 220,
+                          fit: BoxFit.cover,
+                        )
+                      : Image.network(
+                          mediaUrl,
+                          width: double.infinity,
+                          height: 220,
+                          fit: BoxFit.cover,
+                        )),
+            ),
+          ],
           const SizedBox(height: 16),
           Row(
             children: [
@@ -572,32 +738,195 @@ class _RealPostCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 24),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.comment_outlined,
-                    color: AppTheme.grey,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${(post['comments'] as List? ?? []).length}',
-                    style: const TextStyle(
+              GestureDetector(
+                onTap: () => _openComments(context),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.comment_outlined,
                       color: AppTheme.grey,
-                      fontSize: 13,
+                      size: 20,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    Text(
+                      '$commentsCount',
+                      style: const TextStyle(
+                        color: AppTheme.grey,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(width: 24),
-              const Icon(
-                Icons.share_outlined,
-                color: AppTheme.grey,
-                size: 20,
+              GestureDetector(
+                onTap: () {
+                  final text = (post['content'] ?? '').toString();
+                  SharePlus.instance.share(
+                    ShareParams(
+                      text: text.isNotEmpty ? text : 'Check this post on Filmdin',
+                    ),
+                  );
+                },
+                child: const Icon(
+                  Icons.share_outlined,
+                  color: AppTheme.grey,
+                  size: 20,
+                ),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _openComments(BuildContext context) {
+    final controller = TextEditingController();
+    List<dynamic> comments = List<dynamic>.from(post['comments'] as List? ?? []);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.darkGrey,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Comments',
+                style: TextStyle(
+                  color: AppTheme.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 220,
+                child: comments.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No comments yet',
+                          style: TextStyle(color: AppTheme.grey),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: comments.length,
+                        itemBuilder: (context, index) {
+                          final comment = comments[index] as Map<String, dynamic>;
+                          final commentUser = comment['user'] as Map<String, dynamic>? ?? {};
+                          final commentName = (commentUser['name'] ?? 'User').toString();
+                          final commentText = (comment['text'] ?? '').toString();
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: AppTheme.gold,
+                                  child: Text(
+                                    commentName.isNotEmpty ? commentName[0].toUpperCase() : 'U',
+                                    style: const TextStyle(
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.black,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          commentName,
+                                          style: const TextStyle(
+                                            color: AppTheme.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          commentText,
+                                          style: const TextStyle(color: AppTheme.grey),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      style: const TextStyle(color: AppTheme.white),
+                      decoration: InputDecoration(
+                        hintText: 'Write a comment...',
+                        hintStyle: const TextStyle(color: AppTheme.grey),
+                        filled: true,
+                        fillColor: AppTheme.black,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () async {
+                      final text = controller.text.trim();
+                      if (text.isEmpty || onComment == null) return;
+
+                      final updatedComments = await onComment!(text);
+                      if (updatedComments != null) {
+                        setSheetState(() {
+                          comments = updatedComments;
+                        });
+                        controller.clear();
+                      } else {
+                        if (sheetContext.mounted) {
+                          ScaffoldMessenger.of(sheetContext).showSnackBar(
+                            const SnackBar(
+                              content: Text('Failed to add comment. Please try again.'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.send, color: AppTheme.gold),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -797,11 +1126,7 @@ class _SearchTabState extends State<SearchTab> {
           // Results
           Expanded(
             child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      color: AppTheme.gold,
-                    ),
-                  )
+                ? const SkeletonList(itemCount: 6, itemHeight: 82)
                 : _users.isEmpty
                     ? Center(
                         child: Column(
@@ -1176,8 +1501,13 @@ class _ProfileTabState extends State<ProfileTab> {
                     future: ApiService.getMyCredits(token: authProvider.token ?? ''),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(
-                          child: CircularProgressIndicator(color: AppTheme.gold),
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: SkeletonList(
+                            itemCount: 3,
+                            itemHeight: 78,
+                            padding: EdgeInsets.zero,
+                          ),
                         );
                       }
 

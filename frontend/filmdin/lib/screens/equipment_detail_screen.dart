@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import 'user_profile_screen.dart';
 
 class EquipmentDetailScreen extends StatelessWidget {
   final Map<String, dynamic> equipment;
@@ -12,6 +18,8 @@ class EquipmentDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final owner = equipment['owner'] as Map<String, dynamic>? ?? {};
+    final ownerId = (owner['_id'] ?? owner['id'] ?? '').toString();
+    final ownerEmail = (owner['email'] ?? '').toString();
     final ownerName = owner['name'] ?? 'Unknown';
     final ownerRole = owner['role'] ?? 'Filmmaker';
     final name = equipment['name'] ?? 'Equipment';
@@ -161,12 +169,114 @@ class EquipmentDetailScreen extends StatelessWidget {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Contact flow will be added soon'),
-                      backgroundColor: Colors.green,
+                onPressed: () async {
+                  await showModalBottomSheet<void>(
+                    context: context,
+                    backgroundColor: AppTheme.darkGrey,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                     ),
+                    builder: (sheetContext) {
+                      return SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ListTile(
+                                leading: const Icon(Icons.email_outlined, color: AppTheme.gold),
+                                title: const Text(
+                                  'Email Owner',
+                                  style: TextStyle(color: AppTheme.white),
+                                ),
+                                onTap: () async {
+                                  Navigator.pop(sheetContext);
+
+                                  var contactEmail = ownerEmail;
+                                  if (contactEmail.isEmpty && ownerId.isNotEmpty) {
+                                    final authProvider = Provider.of<AuthProvider>(
+                                      context,
+                                      listen: false,
+                                    );
+
+                                    final result = await ApiService.getUserProfile(
+                                      userId: ownerId,
+                                      token: authProvider.token ?? '',
+                                    );
+
+                                    if (result['success'] == true) {
+                                      final userData = result['data']?['user'] as Map<String, dynamic>?;
+                                      contactEmail = (userData?['email'] ?? '').toString();
+                                    }
+                                  }
+
+                                  if (contactEmail.isEmpty) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Owner email is not available'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                    return;
+                                  }
+
+                                  final Uri emailUri = Uri(
+                                    scheme: 'mailto',
+                                    path: contactEmail,
+                                    queryParameters: {
+                                      'subject': 'Equipment Rental Inquiry: $name',
+                                    },
+                                  );
+
+                                  if (!await launchUrl(emailUri)) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Could not open email app'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+                              ListTile(
+                                leading: const Icon(Icons.person_outline, color: AppTheme.gold),
+                                title: const Text(
+                                  'View Owner Profile',
+                                  style: TextStyle(color: AppTheme.white),
+                                ),
+                                onTap: () {
+                                  Navigator.pop(sheetContext);
+
+                                  if (ownerId.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Owner profile is not available'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => UserProfileScreen(
+                                        userId: ownerId,
+                                        userName: ownerName.toString(),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
                 style: ElevatedButton.styleFrom(

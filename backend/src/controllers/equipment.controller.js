@@ -33,7 +33,7 @@ exports.listEquipment = async (req, res) => {
     });
 
     const populatedEquipment = await Equipment.findById(equipment._id)
-      .populate('owner', 'name role');
+      .populate('owner', 'name role email');
 
     return res.status(201).json({
       message: 'Equipment listed successfully',
@@ -62,7 +62,7 @@ exports.getAllEquipment = async (req, res) => {
     }
 
     const equipment = await Equipment.find(query)
-      .populate('owner', 'name role')
+      .populate('owner', 'name role email')
       .sort({ createdAt: -1 });
 
     return res.json({ equipment });
@@ -78,7 +78,7 @@ exports.getAllEquipment = async (req, res) => {
 exports.getMyEquipment = async (req, res) => {
   try {
     const equipment = await Equipment.find({ owner: req.userId })
-      .populate('owner', 'name role')
+      .populate('owner', 'name role email')
       .sort({ createdAt: -1 });
 
     return res.json({ equipment });
@@ -94,7 +94,7 @@ exports.getMyEquipment = async (req, res) => {
 exports.getEquipmentById = async (req, res) => {
   try {
     const equipment = await Equipment.findById(req.params.id)
-      .populate('owner', 'name role');
+      .populate('owner', 'name role email');
 
     if (!equipment) {
       return res.status(404).json({ message: 'Equipment not found' });
@@ -143,7 +143,7 @@ exports.updateEquipment = async (req, res) => {
     await equipment.save();
 
     const populatedEquipment = await Equipment.findById(equipment._id)
-      .populate('owner', 'name role');
+      .populate('owner', 'name role email');
 
     return res.json({
       message: 'Equipment updated successfully',

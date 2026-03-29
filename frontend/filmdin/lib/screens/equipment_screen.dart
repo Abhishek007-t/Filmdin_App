@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../providers/equipment_provider.dart';
 import '../services/api_service.dart';
+import '../widgets/loading_skeleton.dart';
 import 'add_equipment_screen.dart';
 import 'equipment_detail_screen.dart';
 
@@ -131,9 +132,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
           ),
           Expanded(
             child: equipmentProvider.isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppTheme.gold),
-                  )
+                ? const SkeletonList(itemCount: 5, itemHeight: 108)
                 : equipmentProvider.equipment.isEmpty
                 ? RefreshIndicator(
                     color: AppTheme.gold,

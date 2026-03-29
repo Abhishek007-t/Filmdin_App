@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../providers/job_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/loading_skeleton.dart';
 import 'add_job_screen.dart';
 import 'job_detail_screen.dart';
 
@@ -172,9 +173,7 @@ class _JobsScreenState extends State<JobsScreen> {
             const SizedBox(height: 8),
             Expanded(
               child: jobProvider.isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(color: AppTheme.gold),
-                    )
+                  ? const SkeletonList(itemCount: 5, itemHeight: 120)
                   : jobs.isEmpty
                       ? const Center(
                           child: Column(

@@ -1,6 +1,6 @@
 {
-    "name": "filmdin",
-    "short_name": "filmdin",
+    "name": "Filmdin",
+    "short_name": "Filmdin",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

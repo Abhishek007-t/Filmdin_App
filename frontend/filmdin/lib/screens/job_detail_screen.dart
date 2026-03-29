@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../widgets/loading_skeleton.dart';
 
 class JobDetailScreen extends StatefulWidget {
   final String jobId;
@@ -68,9 +69,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         ),
       ),
       body: isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.gold),
-            )
+          ? const ProfileSkeleton()
           : jobData == null
               ? const Center(
                   child: Text(

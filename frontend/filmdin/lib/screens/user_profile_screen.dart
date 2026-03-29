@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../widgets/loading_skeleton.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String userId;
@@ -143,7 +144,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ),
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.gold))
+          ? const ProfileSkeleton()
           : userData == null
           ? const Center(
               child: Text(
