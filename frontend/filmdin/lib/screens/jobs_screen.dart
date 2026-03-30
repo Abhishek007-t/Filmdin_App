@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
 import '../providers/job_provider.dart';
 import '../services/api_service.dart';
@@ -35,13 +36,235 @@ class _JobsScreenState extends State<JobsScreen> {
   ];
 
   final Set<String> _applyingJobs = <String>{};
+  final Set<String> _savedJobIds = <String>{};
+
+  String _sortBy = 'Newest';
+  String _locationQuery = '';
+  String _compensationFilter = 'All';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSavedJobs();
       _fetchJobs();
     });
+  }
+
+  Future<void> _loadSavedJobs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList('saved_job_ids') ?? <String>[];
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _savedJobIds
+        ..clear()
+        ..addAll(saved);
+    });
+  }
+
+  Future<void> _persistSavedJobs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('saved_job_ids', _savedJobIds.toList());
+  }
+
+  Future<void> _toggleSaveJob(String jobId) async {
+    if (jobId.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      if (_savedJobIds.contains(jobId)) {
+        _savedJobIds.remove(jobId);
+      } else {
+        _savedJobIds.add(jobId);
+      }
+    });
+
+    await _persistSavedJobs();
+
+    if (!mounted) {
+      return;
+    }
+
+    final isSaved = _savedJobIds.contains(jobId);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isSaved ? 'Job saved' : 'Job removed from saved'),
+        backgroundColor: isSaved ? Colors.green : AppTheme.grey,
+      ),
+    );
+  }
+
+  List<dynamic> _processedJobs(List<dynamic> sourceJobs) {
+    final filtered = sourceJobs.whereType<Map<String, dynamic>>().where((job) {
+      if (_locationQuery.trim().isNotEmpty) {
+        final location = (job['location'] ?? '').toString().toLowerCase();
+        if (!location.contains(_locationQuery.trim().toLowerCase())) {
+          return false;
+        }
+      }
+
+      if (_compensationFilter != 'All') {
+        final compensation = (job['compensation'] ?? '').toString();
+        if (compensation != _compensationFilter) {
+          return false;
+        }
+      }
+
+      return true;
+    }).toList();
+
+    filtered.sort((a, b) {
+      final aDate = DateTime.tryParse((a['createdAt'] ?? '').toString()) ?? DateTime(2000);
+      final bDate = DateTime.tryParse((b['createdAt'] ?? '').toString()) ?? DateTime(2000);
+
+      if (_sortBy == 'Oldest') {
+        return aDate.compareTo(bDate);
+      }
+
+      if (_sortBy == 'Paid First') {
+        final score = {'Paid': 0, 'Negotiable': 1, 'Unpaid': 2};
+        final aScore = score[(a['compensation'] ?? '').toString()] ?? 3;
+        final bScore = score[(b['compensation'] ?? '').toString()] ?? 3;
+        final compResult = aScore.compareTo(bScore);
+        if (compResult != 0) return compResult;
+      }
+
+      return bDate.compareTo(aDate);
+    });
+
+    return filtered;
+  }
+
+  String _timeAgo(dynamic value) {
+    if (value == null) return 'now';
+    final date = DateTime.tryParse(value.toString());
+    if (date == null) return 'now';
+
+    final diff = DateTime.now().difference(date);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'just now';
+  }
+
+  Future<void> _openFilterSheet() async {
+    final locationController = TextEditingController(text: _locationQuery);
+    var localCompensation = _compensationFilter;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.darkGrey,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) => Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Filter Jobs',
+                  style: TextStyle(
+                    color: AppTheme.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: locationController,
+                  style: const TextStyle(color: AppTheme.white),
+                  decoration: InputDecoration(
+                    hintText: 'Location contains...',
+                    hintStyle: const TextStyle(color: AppTheme.grey),
+                    filled: true,
+                    fillColor: AppTheme.black,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: localCompensation,
+                  dropdownColor: AppTheme.black,
+                  style: const TextStyle(color: AppTheme.white),
+                  decoration: InputDecoration(
+                    labelText: 'Compensation',
+                    labelStyle: const TextStyle(color: AppTheme.grey),
+                    filled: true,
+                    fillColor: AppTheme.black,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'All', child: Text('All')),
+                    DropdownMenuItem(value: 'Paid', child: Text('Paid')),
+                    DropdownMenuItem(value: 'Negotiable', child: Text('Negotiable')),
+                    DropdownMenuItem(value: 'Unpaid', child: Text('Unpaid')),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setSheetState(() {
+                      localCompensation = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          setState(() {
+                            _locationQuery = '';
+                            _compensationFilter = 'All';
+                          });
+                          Navigator.pop(sheetContext);
+                        },
+                        child: const Text('Reset'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.gold,
+                          foregroundColor: Colors.black,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _locationQuery = locationController.text.trim();
+                            _compensationFilter = localCompensation;
+                          });
+                          Navigator.pop(sheetContext);
+                        },
+                        child: const Text('Apply'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _fetchJobs() async {
@@ -100,7 +323,7 @@ class _JobsScreenState extends State<JobsScreen> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final jobProvider = Provider.of<JobProvider>(context);
-    final jobs = jobProvider.jobs;
+    final jobs = _processedJobs(jobProvider.jobs);
 
     return Scaffold(
       backgroundColor: AppTheme.black,
@@ -133,6 +356,49 @@ class _JobsScreenState extends State<JobsScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.darkGrey,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _sortBy,
+                          dropdownColor: AppTheme.darkGrey,
+                          style: const TextStyle(color: AppTheme.white),
+                          items: const [
+                            DropdownMenuItem(value: 'Newest', child: Text('Sort: Newest')),
+                            DropdownMenuItem(value: 'Oldest', child: Text('Sort: Oldest')),
+                            DropdownMenuItem(value: 'Paid First', child: Text('Sort: Paid First')),
+                          ],
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _sortBy = value;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: _openFilterSheet,
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppTheme.gold),
+                    ),
+                    icon: const Icon(Icons.tune, color: AppTheme.gold, size: 18),
+                    label: const Text('Filter', style: TextStyle(color: AppTheme.gold)),
+                  ),
+                ],
               ),
             ),
             SizedBox(
@@ -279,6 +545,14 @@ class _JobsScreenState extends State<JobsScreen> {
                                           fontSize: 13,
                                         ),
                                       ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        _timeAgo(job?['createdAt']),
+                                        style: const TextStyle(
+                                          color: AppTheme.grey,
+                                          fontSize: 12,
+                                        ),
+                                      ),
                                       const SizedBox(height: 12),
                                       Row(
                                         children: [
@@ -331,6 +605,16 @@ class _JobsScreenState extends State<JobsScreen> {
                                             ),
                                           ),
                                           const SizedBox(width: 8),
+                                          IconButton(
+                                            visualDensity: VisualDensity.compact,
+                                            onPressed: () => _toggleSaveJob(jobId),
+                                            icon: Icon(
+                                              _savedJobIds.contains(jobId)
+                                                  ? Icons.bookmark
+                                                  : Icons.bookmark_border,
+                                              color: AppTheme.gold,
+                                            ),
+                                          ),
                                           if (isOwnerJob)
                                             PopupMenuButton<String>(
                                               icon: const Icon(
