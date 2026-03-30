@@ -126,6 +126,14 @@ exports.forgotPassword = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (user) {
+      const transporter = getEmailTransporter();
+      if (!transporter) {
+        console.error('Forgot password email failed: SMTP is not configured');
+        return res.status(503).json({
+          message: 'Email service is not configured. Please try again later.',
+        });
+      }
+
       const rawToken = crypto.randomBytes(32).toString('hex');
       const hashedToken = crypto
         .createHash('sha256')
@@ -135,12 +143,6 @@ exports.forgotPassword = async (req, res) => {
       user.resetPasswordToken = hashedToken;
       user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
       await user.save();
-
-      const transporter = getEmailTransporter();
-      if (!transporter) {
-        console.error('Forgot password email skipped: SMTP is not configured');
-        return res.json(genericResponse);
-      }
 
       const appUrl = process.env.APP_URL || 'https://filmdin.app';
       const resetLink = `${appUrl}/reset-password?token=${rawToken}`;
@@ -159,11 +161,25 @@ exports.forgotPassword = async (req, res) => {
       });
 
       try {
-        await Promise.race([mailPromise, timeoutPromise]);
+        const mailResult = await Promise.race([mailPromise, timeoutPromise]);
+        const rejected = Array.isArray(mailResult?.rejected)
+          ? mailResult.rejected
+          : [];
+
+        if (rejected.length > 0) {
+          console.error('Forgot password email rejected recipients:', rejected);
+          return res.status(502).json({
+            message: 'Could not deliver reset email. Please verify your email and try again.',
+          });
+        }
       } catch (mailError) {
         console.error('Forgot password email send failed:', mailError.message);
-        return res.json(genericResponse);
+        return res.status(502).json({
+          message: 'Could not send reset email right now. Please try again shortly.',
+        });
       }
+
+      return res.json({ message: 'Password reset email sent successfully' });
     }
 
     return res.json(genericResponse);
