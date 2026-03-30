@@ -14,31 +14,71 @@ class AuthProvider extends ChangeNotifier {
   Map<String, dynamic>? get user => _user;
   bool get isLoggedIn => _token != null;
 
+  Map<String, dynamic> _firebaseFallbackUser(User firebaseUser) {
+    final displayName = (firebaseUser.displayName ?? '').trim();
+    return {
+      'id': firebaseUser.uid,
+      '_id': firebaseUser.uid,
+      'firebaseUid': firebaseUser.uid,
+      'email': firebaseUser.email,
+      'name': displayName.isNotEmpty ? displayName : (firebaseUser.email ?? 'Filmdin User').split('@').first,
+      'role': 'Director',
+      'bio': '',
+      'location': '',
+      'profilePhoto': '',
+    };
+  }
+
+  bool _isTransientBackendError(String? message) {
+    final text = (message ?? '').toLowerCase();
+    return text.contains('taking too long') ||
+        text.contains('unable to reach server') ||
+        text.contains('no internet connection');
+  }
+
   Future<bool> _loadBackendUser() async {
     if (_token == null || _token!.isEmpty) {
       return false;
     }
-
-    final result = await ApiService.getMyStats(token: _token!);
-    if (result['success'] != true) {
-      _errorMessage = result['message'] ?? 'Failed to load profile';
-      return false;
-    }
-
-    final statsUser = result['data']?['user'] as Map<String, dynamic>?;
     final firebaseUser = FirebaseAuth.instance.currentUser;
 
-    if (statsUser != null) {
-      _user = {
-        ...statsUser,
-        'id': (statsUser['id'] ?? statsUser['_id'])?.toString(),
-        '_id': (statsUser['_id'] ?? statsUser['id'])?.toString(),
-        'firebaseUid': firebaseUser?.uid,
-        'email': firebaseUser?.email ?? statsUser['email'],
-      };
+    const maxAttempts = 3;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      final result = await ApiService.getMyStats(token: _token!);
+      if (result['success'] == true) {
+        final statsUser = result['data']?['user'] as Map<String, dynamic>?;
+
+        if (statsUser != null) {
+          _user = {
+            ...statsUser,
+            'id': (statsUser['id'] ?? statsUser['_id'])?.toString(),
+            '_id': (statsUser['_id'] ?? statsUser['id'])?.toString(),
+            'firebaseUid': firebaseUser?.uid,
+            'email': firebaseUser?.email ?? statsUser['email'],
+          };
+        }
+
+        return true;
+      }
+
+      final message = (result['message'] ?? 'Failed to load profile').toString();
+      final transient = _isTransientBackendError(message);
+
+      if (!transient || attempt == maxAttempts) {
+        if (transient && firebaseUser != null) {
+          _user = _firebaseFallbackUser(firebaseUser);
+          _errorMessage = null;
+          return true;
+        }
+
+        _errorMessage = message;
+        return false;
+      }
+
+      await Future.delayed(Duration(seconds: attempt * 2));
     }
 
-    return true;
+    return false;
   }
 
   // Register
@@ -57,7 +97,7 @@ class AuthProvider extends ChangeNotifier {
           .createUserWithEmailAndPassword(email: email, password: password);
 
       await credential.user?.updateDisplayName(name);
-      _token = await credential.user?.getIdToken(true);
+        _token = await credential.user?.getIdToken();
 
       if (_token == null || _token!.isEmpty) {
         _errorMessage = 'Unable to get Firebase session token';
@@ -108,7 +148,7 @@ class AuthProvider extends ChangeNotifier {
       final credential = await FirebaseAuth.instance
           .signInWithEmailAndPassword(email: email, password: password);
 
-      _token = await credential.user?.getIdToken(true);
+        _token = await credential.user?.getIdToken();
       final loaded = await _loadBackendUser();
 
       _isLoading = false;
@@ -245,7 +285,7 @@ class AuthProvider extends ChangeNotifier {
       return;
     }
 
-    _token = await firebaseUser.getIdToken(true);
+    _token = await firebaseUser.getIdToken();
     await _loadBackendUser();
     notifyListeners();
   }
