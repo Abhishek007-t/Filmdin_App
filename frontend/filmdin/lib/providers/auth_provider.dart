@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/api_service.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -14,6 +14,33 @@ class AuthProvider extends ChangeNotifier {
   Map<String, dynamic>? get user => _user;
   bool get isLoggedIn => _token != null;
 
+  Future<bool> _loadBackendUser() async {
+    if (_token == null || _token!.isEmpty) {
+      return false;
+    }
+
+    final result = await ApiService.getMyStats(token: _token!);
+    if (result['success'] != true) {
+      _errorMessage = result['message'] ?? 'Failed to load profile';
+      return false;
+    }
+
+    final statsUser = result['data']?['user'] as Map<String, dynamic>?;
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+
+    if (statsUser != null) {
+      _user = {
+        ...statsUser,
+        'id': (statsUser['id'] ?? statsUser['_id'])?.toString(),
+        '_id': (statsUser['_id'] ?? statsUser['id'])?.toString(),
+        'firebaseUid': firebaseUser?.uid,
+        'email': firebaseUser?.email ?? statsUser['email'],
+      };
+    }
+
+    return true;
+  }
+
   // Register
   Future<bool> register({
     required String name,
@@ -25,23 +52,47 @@ class AuthProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    final result = await ApiService.register(
-      name: name,
-      email: email,
-      password: password,
-      role: role,
-    );
+    try {
+      final credential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
 
-    _isLoading = false;
+      await credential.user?.updateDisplayName(name);
+      _token = await credential.user?.getIdToken(true);
 
-    if (result['success']) {
-      _token = result['data']['token'];
-      _user = result['data']['user'];
-      await _saveToken(_token!);
+      if (_token == null || _token!.isEmpty) {
+        _errorMessage = 'Unable to get Firebase session token';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      final syncResult = await ApiService.updateProfile(
+        token: _token!,
+        name: name,
+        bio: '',
+        location: '',
+        role: role,
+      );
+
+      if (syncResult['success'] != true) {
+        _errorMessage = syncResult['message'] ?? 'Failed to sync user profile';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      final loaded = await _loadBackendUser();
+      _isLoading = false;
       notifyListeners();
-      return true;
-    } else {
-      _errorMessage = result['message'];
+      return loaded;
+    } on FirebaseAuthException catch (e) {
+      _errorMessage = e.message ?? 'Firebase authentication failed';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _errorMessage = 'Failed to register';
+      _isLoading = false;
       notifyListeners();
       return false;
     }
@@ -53,18 +104,24 @@ class AuthProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    final result = await ApiService.login(email: email, password: password);
+    try {
+      final credential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
 
-    _isLoading = false;
+      _token = await credential.user?.getIdToken(true);
+      final loaded = await _loadBackendUser();
 
-    if (result['success']) {
-      _token = result['data']['token'];
-      _user = result['data']['user'];
-      await _saveToken(_token!);
+      _isLoading = false;
       notifyListeners();
-      return true;
-    } else {
-      _errorMessage = result['message'];
+      return loaded;
+    } on FirebaseAuthException catch (e) {
+      _errorMessage = e.message ?? 'Invalid credentials';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _errorMessage = 'Failed to login';
+      _isLoading = false;
       notifyListeners();
       return false;
     }
@@ -76,15 +133,19 @@ class AuthProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    final result = await ApiService.forgotPassword(email: email);
-
-    _isLoading = false;
-
-    if (result['success']) {
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email.trim());
+      _isLoading = false;
       notifyListeners();
       return true;
-    } else {
-      _errorMessage = result['message'];
+    } on FirebaseAuthException catch (e) {
+      _errorMessage = e.message ?? 'Failed to send reset email';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _errorMessage = 'Failed to send reset email';
+      _isLoading = false;
       notifyListeners();
       return false;
     }
@@ -95,25 +156,9 @@ class AuthProvider extends ChangeNotifier {
     required String token,
     required String password,
   }) async {
-    _isLoading = true;
-    _errorMessage = null;
+    _errorMessage = 'Use the reset link sent to your email to set a new password';
     notifyListeners();
-
-    final result = await ApiService.resetPassword(
-      token: token,
-      password: password,
-    );
-
-    _isLoading = false;
-
-    if (result['success']) {
-      notifyListeners();
-      return true;
-    } else {
-      _errorMessage = result['message'];
-      notifyListeners();
-      return false;
-    }
+    return false;
   }
 
   // Update profile
@@ -182,60 +227,26 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // Save token to phone storage
-  Future<void> _saveToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('token', token);
-  }
-
   // Logout
   Future<void> logout() async {
+    await FirebaseAuth.instance.signOut();
     _token = null;
     _user = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('token');
     notifyListeners();
   }
 
   // Check if already logged in
   Future<void> checkLoginStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    final storedToken = prefs.getString('token');
-
-    if (storedToken == null || storedToken.isEmpty) {
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    if (firebaseUser == null) {
       _token = null;
+      _user = null;
       notifyListeners();
       return;
     }
 
-    final result = await ApiService.getMyStats(token: storedToken);
-
-    if (result['success'] == true) {
-      _token = storedToken;
-      final statsUser = result['data']?['user'] as Map<String, dynamic>?;
-      if (statsUser != null) {
-        _user = {
-          ...statsUser,
-          'id': (statsUser['id'] ?? statsUser['_id'])?.toString(),
-          '_id': (statsUser['_id'] ?? statsUser['id'])?.toString(),
-        };
-      }
-    } else {
-      final message = (result['message'] ?? '').toString().toLowerCase();
-      final isNetworkError =
-          message.contains('no internet connection') ||
-          message.contains('unable to reach server') ||
-          message.contains('taking too long to respond');
-
-      if (isNetworkError) {
-        _token = storedToken;
-      } else {
-        _token = null;
-        _user = null;
-        await prefs.remove('token');
-      }
-    }
-
+    _token = await firebaseUser.getIdToken(true);
+    await _loadBackendUser();
     notifyListeners();
   }
 }

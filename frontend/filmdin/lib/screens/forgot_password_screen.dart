@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
-import 'reset_password_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -129,28 +128,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             if (emailSent) ...[
               const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ResetPasswordScreen(),
-                      ),
-                    );
-                  },
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppTheme.gold),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Already have token? Reset now',
-                    style: TextStyle(color: AppTheme.gold),
-                  ),
-                ),
+              const Text(
+                'Check your inbox for the Firebase reset link.',
+                style: TextStyle(color: AppTheme.grey, fontSize: 13),
               ),
             ],
           ],
