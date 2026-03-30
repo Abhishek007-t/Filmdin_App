@@ -43,6 +43,7 @@ class AuthProvider extends ChangeNotifier {
     final firebaseUser = FirebaseAuth.instance.currentUser;
 
     const maxAttempts = 3;
+    var refreshedOnInvalidToken = false;
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       final result = await ApiService.getMyStats(token: _token!);
       if (result['success'] == true) {
@@ -62,6 +63,16 @@ class AuthProvider extends ChangeNotifier {
       }
 
       final message = (result['message'] ?? 'Failed to load profile').toString();
+      final lowerMessage = message.toLowerCase();
+
+      if (lowerMessage.contains('invalid token') &&
+          !refreshedOnInvalidToken &&
+          firebaseUser != null) {
+        _token = await firebaseUser.getIdToken(true);
+        refreshedOnInvalidToken = true;
+        continue;
+      }
+
       final transient = _isTransientBackendError(message);
 
       if (!transient || attempt == maxAttempts) {
@@ -97,7 +108,7 @@ class AuthProvider extends ChangeNotifier {
           .createUserWithEmailAndPassword(email: email, password: password);
 
       await credential.user?.updateDisplayName(name);
-        _token = await credential.user?.getIdToken();
+        _token = await credential.user?.getIdToken(true);
 
       if (_token == null || _token!.isEmpty) {
         _errorMessage = 'Unable to get Firebase session token';
@@ -148,7 +159,7 @@ class AuthProvider extends ChangeNotifier {
       final credential = await FirebaseAuth.instance
           .signInWithEmailAndPassword(email: email, password: password);
 
-        _token = await credential.user?.getIdToken();
+        _token = await credential.user?.getIdToken(true);
       final loaded = await _loadBackendUser();
 
       _isLoading = false;
@@ -285,7 +296,7 @@ class AuthProvider extends ChangeNotifier {
       return;
     }
 
-    _token = await firebaseUser.getIdToken();
+    _token = await firebaseUser.getIdToken(true);
     await _loadBackendUser();
     notifyListeners();
   }
